@@ -84,6 +84,7 @@ df['ret'] = df.groupby(['permno'])['ret'].shift(-1)  # we shift return in t peri
 df['date'] = df.groupby(['permno'])['jdate'].shift(-1)  # date is return date, jdate is predictor date
 df = df.drop(['jdate'], axis=1)  # now we only keep the date of return
 df = df.dropna(subset=['ret']).reset_index(drop=True)
+df.replace([-np.inf, np.inf], np.nan, inplace=True)
 
 # save raw data
 with open('chars_daily_raw_no_impute.feather', 'wb') as f:
@@ -102,10 +103,10 @@ df_impute['ffi49'] = df_impute['ffi49'].astype(int)
 df_impute = fillna_ind(df_impute, method='median', ffi=49)
 
 df_impute = fillna_all(df_impute, method='median')
-df_impute['re'] = df_impute['re'].fillna(0)  # re use IBES database, there are lots of missing data
+# df_impute['re'] = df_impute['re'].fillna(0)  # re use IBES database, there are lots of missing data
 
 df_impute['year'] = df_impute['date'].dt.year
-df_impute = df_impute[df_impute['year'] >= 2015]
+df_impute = df_impute[df_impute['year'] >= 2000]
 df_impute = df_impute.drop(['year'], axis=1)
 
 with open('chars_daily_raw_imputed.feather', 'wb') as f:
@@ -114,9 +115,10 @@ with open('chars_daily_raw_imputed.feather', 'wb') as f:
 # standardize raw data
 df_rank = df.copy()
 df_rank['lag_me'] = df_rank['me']
+df_rank['bm'] = np.where(df_rank['bm']<0,np.nan,df_rank['bm']) # if bm<0 then bm=nan and rank_bm=0
 df_rank = standardize(df_rank)
 df_rank['year'] = df_rank['date'].dt.year
-df_rank = df_rank[df_rank['year'] >= 2015]
+df_rank = df_rank[df_rank['year'] >= 2000]
 df_rank = df_rank.drop(['year'], axis=1)
 df_rank['log_me'] = np.log(df_rank['lag_me'])
 
@@ -128,7 +130,7 @@ df_rank = df_impute.copy()
 df_rank['lag_me'] = df_rank['me']
 df_rank = standardize(df_rank)
 df_rank['year'] = df_rank['date'].dt.year
-df_rank = df_rank[df_rank['year'] >= 2015]
+df_rank = df_rank[df_rank['year'] >= 2000]
 df_rank = df_rank.drop(['year'], axis=1)
 df_rank['log_me'] = np.log(df_rank['lag_me'])
 
