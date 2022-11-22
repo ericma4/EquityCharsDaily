@@ -38,16 +38,16 @@ q_only_list = ['alm']
 m_var_list = ['baspread', 'beta', 'ill', 'maxret', 'mom12m', 'mom1m', 'rvar_capm', 'rvar_ff3', 'rvar_mean',
               'std_dolvol', 'std_turn', 'me', 'turn']
 
-df_a = chars_a[obs_var_list + accounting_var_list + a_only_list + m_var_list]
-df_a.columns = obs_var_list + a_var_list + a_only_list + m_var_list
+df_a = chars_a[obs_var_list + accounting_var_list + a_only_list]
+df_a.columns = obs_var_list + a_var_list + a_only_list
 df_a = df_a.sort_values(obs_var_list)
 
-df_q = chars_q[obs_var_list + accounting_var_list + q_only_list]
-df_q.columns = obs_var_list + q_var_list + q_only_list
+df_q = chars_q[obs_var_list + accounting_var_list + q_only_list  + m_var_list]
+df_q.columns = obs_var_list + q_var_list + q_only_list + m_var_list
 # drop the same information columns for merging
-df_q = df_q.drop(['sic', 'ret', 'retx', 'retadj', 'exchcd', 'shrcd'], axis=1)
+df_a = df_a.drop(['sic', 'ret', 'retx', 'retadj', 'exchcd', 'shrcd'], axis=1)
 
-df = df_a.merge(df_q, how='left', on=['gvkey', 'jdate', 'permno'])
+df = df_a.merge(df_q, how='right', on=['gvkey', 'jdate', 'permno'])
 
 # first element in accounting_var_list is datadate
 for i in tqdm(accounting_var_list[1:]):
@@ -106,7 +106,7 @@ df_impute = fillna_all(df_impute, method='median')
 # df_impute['re'] = df_impute['re'].fillna(0)  # re use IBES database, there are lots of missing data
 
 df_impute['year'] = df_impute['date'].dt.year
-df_impute = df_impute[df_impute['year'] >= 2000]
+df_impute = df_impute[df_impute['year'] >= 1998]
 df_impute = df_impute.drop(['year'], axis=1)
 
 with open('chars_daily_raw_imputed.feather', 'wb') as f:
@@ -118,7 +118,7 @@ df_rank['lag_me'] = df_rank['me']
 df_rank['bm'] = np.where(df_rank['bm']<0,np.nan,df_rank['bm']) # if bm<0 then bm=nan and rank_bm=0
 df_rank = standardize(df_rank)
 df_rank['year'] = df_rank['date'].dt.year
-df_rank = df_rank[df_rank['year'] >= 2000]
+df_rank = df_rank[df_rank['year'] >= 1998]
 df_rank = df_rank.drop(['year'], axis=1)
 df_rank['log_me'] = np.log(df_rank['lag_me'])
 
@@ -130,7 +130,7 @@ df_rank = df_impute.copy()
 df_rank['lag_me'] = df_rank['me']
 df_rank = standardize(df_rank)
 df_rank['year'] = df_rank['date'].dt.year
-df_rank = df_rank[df_rank['year'] >= 2000]
+df_rank = df_rank[df_rank['year'] >= 1998]
 df_rank = df_rank.drop(['year'], axis=1)
 df_rank['log_me'] = np.log(df_rank['lag_me'])
 

@@ -22,6 +22,8 @@ crsp = conn.raw_sql("""
                     where a.date > '01/01/2014'
                     """)
 
+crsp = crsp.dropna()
+
 # sort variables by permno and date
 crsp = crsp.sort_values(by=['permno', 'date'])
 

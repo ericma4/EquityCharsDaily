@@ -210,7 +210,7 @@ rvar_mean = rvar_mean.drop_duplicates(['permno', 'jdate'])
 
 chars_q = pd.merge(chars_q, rvar_mean, how='left', on=['permno', 'jdate'])
 
-with open('rvar_ff3.feather', 'rb') as f:
+with open('rvar_ff3_daily.feather', 'rb') as f:
     rvar_ff3 = feather.read_feather(f)
 
 rvar_ff3['permno'] = rvar_ff3['permno'].astype(int)
