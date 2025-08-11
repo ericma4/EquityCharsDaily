@@ -16,10 +16,12 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                    select a.permno, a.date, a.vol, a.shrout
-                    from crsp.dsf as a
-                    where a.date > '01/01/2014'
-                    """)
+                    select a.permno, a.dlycaldt, a.dlyvol, a.dlyshrout
+                    from crsp.dsf_v2 as a
+                    where a.dlycaldt >= '01/01/1959'
+                    """, date_cols=['dlycaldt'])
+
+crsp.rename(columns={'dlycaldt': 'date', 'dlyvol': 'vol', 'dlyshrout': 'shrout'}, inplace=True)
 
 crsp = crsp.dropna()
 
@@ -88,13 +90,19 @@ def get_char_daily(df, firm_list):
             temp = df[(df['permno'] == firm) & (i - 59 <= df['day_count']) & (df['day_count'] <= i)]
             # if observations in less than 60 days, we drop the characteristic of this month
             if temp['permno'].count() < 60:
-                pass
-            else:
-                index = temp.tail(1).index
-                X = pd.DataFrame()
-                X[['vol', 'shrout']] = temp[['vol', 'shrout']]
-                std_turn = (X['vol'] / X['shrout']).std()
-                df.loc[index, 'std_turn'] = std_turn
+                continue
+            
+            if temp['vol'].notna().sum() < 60:
+                continue
+            
+            if temp['shrout'].isna().any():
+                continue
+            
+            index = temp.tail(1).index
+            X = pd.DataFrame()
+            X[['vol', 'shrout']] = temp[['vol', 'shrout']]
+            std_turn = (X['vol'] / X['shrout']).std()
+            df.loc[index, 'std_turn'] = std_turn
     return df
 
 

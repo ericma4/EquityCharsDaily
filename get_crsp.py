@@ -14,13 +14,15 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                      select a.permno, a.date, a.ret, a.retx, (a.ret - b.rf) as exret, b.mktrf, b.smb, b.hml, a.vol, a.prc, 
-                             a.shrout, a.askhi, a.bidlo
-                      from crsp.dsf as a
+                      select a.permno, a.dlycaldt, a.dlyret, a.dlyretx, (a.dlyret - b.rf) as exret, b.mktrf, b.smb, b.hml, a.dlyvol, a.dlyprc, 
+                             a.shrout, a.dlylow, a.dlyhigh
+                      from crsp.dsf_v2 as a
                       left join ff.factors_daily as b
-                      on a.date=b.date
-                      where a.date >= '01/01/2014'
-                      """)
+                      on a.dlycaldt=b.date
+                      where a.dlycaldt >= '01/01/1959'
+                      """, date_cols=['dlycaldt'])
 
-with open('crsp_dsf_2014.feather', 'wb') as f:
+# crsp = crsp.dropna()
+
+with open('crsp_dsf_1959.feather', 'wb') as f:
     feather.write_feather(crsp, f)

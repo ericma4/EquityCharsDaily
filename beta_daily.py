@@ -15,12 +15,15 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                      select a.permno, a.date, a.ret, (a.ret - b.rf) as exret, b.mktrf, b.smb, b.hml
-                      from crsp.dsf as a
+                      select a.permno, a.dlycaldt, a.dlyret, a.dlyvol, a.dlydelflg, (a.dlyret - b.rf) as exret,
+                      b.rf, b.mktrf, b.smb, b.hml
+                      from crsp.dsf_v2 as a
                       left join ff.factors_daily as b
-                      on a.date=b.date
-                      where a.date > '01/01/2014'
-                      """)
+                      on a.dlycaldt=b.date
+                      where a.dlycaldt >= '01/01/1959'
+                      """, date_cols=['dlycaldt'])
+
+crsp.rename(columns={'dlycaldt': 'date', 'dlyret': 'ret', 'dlyvol': 'vol'}, inplace=True)
 
 crsp = crsp.dropna()
 
@@ -81,6 +84,7 @@ def get_beta_daily(df, firm_list):
     :param firm_list: list of firms matching stock dataframe
     :return: dataframe with variance of residual
     """
+    beta_cols = ['beta_mktrf']
     for firm, count, prog in zip(firm_list['permno'], firm_list['day_num'], range(firm_list['permno'].count()+1)):
         prog = prog + 1
         print('processing permno %s' % firm, '/', 'finished', '%.2f%%' % ((prog/firm_list['permno'].count())*100))
@@ -89,16 +93,22 @@ def get_beta_daily(df, firm_list):
             temp = df[(df['permno'] == firm) & (i - 59 <= df['day_count']) & (df['day_count'] <= i)]
             # if observations in less than 60 days, we drop the characteristic of this month
             if temp['permno'].count() < 60:
-                pass
-            else:
-                rolling_window = temp['permno'].count()
-                index = temp.tail(1).index
-                X = np.mat(temp[['mktrf']])
-                Y = np.mat(temp[['exret']])
-                ones = np.mat(np.ones(rolling_window)).T
-                M = np.identity(rolling_window) - ones.dot((ones.T.dot(ones)).I).dot(ones.T)
-                beta = (X.T.dot(M).dot(X)).I.dot((X.T.dot(M).dot(Y)))
-                df.loc[index, 'beta'] = beta
+                continue
+            
+            if temp['vol'].notna().sum() < 60:
+                continue
+            
+            if temp['exret'].isna().any():
+                continue
+            
+            rolling_window = temp['permno'].count()
+            index = temp.tail(1).index
+            X = np.array(temp[['mktrf']], dtype=np.float64)
+            Y = np.array(temp[['exret']], dtype=np.float64)
+            ones = np.ones((rolling_window, 1), dtype=np.float64)
+            M = np.eye(rolling_window) - ones.dot(ones.T) / rolling_window
+            beta = np.linalg.solve(X.T.dot(M).dot(X), X.T.dot(M).dot(Y)) 
+            df.loc[index, beta_cols] = beta.flatten()
     return df
 
 
@@ -153,9 +163,9 @@ if __name__ == '__main__':
     crsp_out = main(0, 1, 0.05)
 
 # process dataframe
-crsp_out = crsp_out.dropna(subset=['beta'])  # drop NA due to rolling
+crsp_out = crsp_out.dropna(subset=['beta_mktrf'])  # drop NA due to rolling
 crsp_out = crsp_out.reset_index(drop=True)
-crsp_out = crsp_out[['permno', 'date', 'beta']]
+crsp_out = crsp_out[['permno', 'date', 'beta_mktrf']]
 
 with open('beta_daily.feather', 'wb') as f:
     feather.write_feather(crsp_out, f)

@@ -15,12 +15,14 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                      select a.permno, a.date, a.ret, (a.ret - b.rf) as exret, b.mktrf, b.smb, b.hml
-                      from crsp.dsf as a
+                      select a.permno, a.dlycaldt, a.dlyret, (a.dlyret - b.rf) as exret
+                      from crsp.dsf_v2 as a
                       left join ff.factors_daily as b
-                      on a.date=b.date
-                      where a.date > '01/01/2014'
-                      """)
+                      on a.dlycaldt=b.date
+                      where a.dlycaldt >= '01/01/1959'
+                      """, date_cols=['dlycaldt'])
+
+crsp.rename(columns={'dlycaldt': 'date', 'dlyret': 'ret'}, inplace=True)
 
 crsp = crsp.dropna()
 
@@ -89,11 +91,17 @@ def get_beta_daily(df, firm_list):
             temp = df[(df['permno'] == firm) & (i - 249 <= df['day_count']) & (df['day_count'] <= i)]
             # if observations in less than 15 days, we drop the characteristic of this month
             if temp['permno'].count() < 15:
-                pass
-            else:
-                index = temp.tail(1).index
-                ret_mom12m = temp['ret'].sum()
-                df.loc[index, 'mom12m'] = ret_mom12m
+                continue
+            
+            if temp['vol'].notna().sum() < 15:
+                continue
+            
+            if temp['exret'].isna().any():
+                continue
+            
+            index = temp.tail(1).index
+            ret_mom12m = temp['ret'].sum()
+            df.loc[index, 'mom12m'] = ret_mom12m
     return df
 
 

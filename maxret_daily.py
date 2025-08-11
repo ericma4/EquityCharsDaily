@@ -15,10 +15,14 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                    select a.permno, a.date, a.ret
-                    from crsp.dsf as a
-                    where a.date > '01/01/2014'
-                    """)
+                    select a.permno, a.dlycaldt, a.dlyret, (a.dlyret - b.rf) as exret
+                    from crsp.dsf_v2 as a
+                    left join ff.factors_daily as b
+                    on a.dlycaldt=b.date
+                    where a.dlycaldt >= '01/01/1959'
+                    """, date_cols=['dlycaldt'])
+
+crsp.rename(columns={'dlycaldt': 'date', 'dlyret': 'ret'}, inplace=True)
 
 crsp = crsp.dropna()
 
@@ -87,13 +91,19 @@ def get_char_daily(df, firm_list):
             temp = df[(df['permno'] == firm) & (i - 59 <= df['day_count']) & (df['day_count'] <= i)]
             # if observations in less than 60 days, we drop the characteristic of this month
             if temp['permno'].count() < 60:
-                pass
-            else:
-                index = temp.tail(1).index
-                X = pd.DataFrame()
-                X[['ret']] = temp[['ret']]
-                maxret = X['ret'].max()
-                df.loc[index, 'maxret'] = maxret
+                continue
+            
+            if temp['vol'].notna().sum() < 60:
+                continue
+            
+            if temp['exret'].isna().any():
+                continue
+            
+            index = temp.tail(1).index
+            X = pd.DataFrame()
+            X[['ret']] = temp[['ret']]
+            maxret = X['ret'].max()
+            df.loc[index, 'maxret'] = maxret
     return df
 
 

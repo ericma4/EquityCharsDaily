@@ -7,7 +7,6 @@ from pandas.tseries.offsets import *
 import datetime
 import pyarrow.feather as feather
 import multiprocessing as mp
-import pickle as pkl
 
 ###################
 # Connect to WRDS #
@@ -16,12 +15,14 @@ conn = wrds.Connection()
 
 # CRSP Block
 crsp = conn.raw_sql("""
-                      select a.permno, a.date, a.ret, (a.ret - b.rf) as exret, b.mktrf, b.smb, b.hml
-                      from crsp.dsf as a
+                      select a.permno, a.dlycaldt, a.dlyret, (a.dlyret - b.rf) as exret, b.mktrf, b.smb, b.hml
+                      from crsp.dsf_v2 as a
                       left join ff.factors_daily as b
-                      on a.date=b.date
-                      where a.date > '01/01/2014'
-                      """)
+                      on a.dlycaldt=b.date
+                      where a.dlycaldt >= '01/01/1959'
+                      """, date_cols=['dlycaldt'])
+
+crsp.rename(columns={'dlycaldt': 'date', 'dlyret': 'ret'}, inplace=True)
 
 crsp = crsp.dropna()
 
@@ -90,19 +91,24 @@ def get_char_daily(df, firm_list):
             temp = df[(df['permno'] == firm) & (i - 59 <= df['day_count']) & (df['day_count'] <= i)]
             # if observations in less than 60 days, we drop the characteristic of this month
             if temp['permno'].count() < 60:
-                pass
-            else:
-                rolling_window = temp['permno'].count()
-                index = temp.tail(1).index
-                X = pd.DataFrame()
-                X[['mktrf', 'smb', 'hml']] = temp[['mktrf', 'smb', 'hml']]
-                X['intercept'] = 1
-                X = X[['intercept', 'mktrf', 'smb', 'hml']]
-                X = np.mat(X)
-                Y = np.mat(temp[['exret']])
-                res = (np.identity(rolling_window) - X.dot(X.T.dot(X).I).dot(X.T)).dot(Y)
-                res_var = res.var(ddof=1)
-                df.loc[index, 'rvar'] = res_var
+                continue
+            
+            if temp['vol'].notna().sum() < 60:
+                continue
+            
+            if temp['exret'].isna().any():
+                continue
+            
+            rolling_window = temp['permno'].count()
+            index = temp.tail(1).index
+            X = np.array(temp[['mktrf', 'smb', 'hml']], dtype=np.float64)
+            Y = np.array(temp[['exret']], dtype=np.float64)
+            ones = np.ones((rolling_window, 1), dtype=np.float64)
+            M = np.eye(rolling_window, dtype=np.float64) - ones.dot(ones.T) / rolling_window
+            beta = np.linalg.solve(X.T.dot(M).dot(X), X.T.dot(M).dot(Y))
+            resid = M.dot(Y - X.dot(beta))
+            rvar = float(resid.T.dot(resid) / (rolling_window - 1))
+            df.loc[index, 'rvar'] = rvar
     return df
 
 
